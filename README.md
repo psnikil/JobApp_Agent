@@ -46,8 +46,7 @@ PROJECTS_PATH=/path/to/your/projects
 COVER_LETTER_PATH=/path/to/your/cover_letter.docx
 
 # Overleaf Credentials (if fetching from Overleaf)
-OVERLEAF_EMAIL=your_email
-OVERLEAF_PASSWORD=your_password
+DATA_FOLDER=/path.to/data/folder
 ```
 
 ## 🏃 Usage
@@ -72,20 +71,18 @@ The project is evolving towards a modular, multi-file structure to ensure scalab
 
 We aim to refactor the monolithic notebook into the following atomic packages:
 
-*   **`core/`**: application logic.
+*   **`graph/`**: application logic.
     *   `Agent`: Manages the LangGraph workflow and state.
     *   `Router`: Decides the path of execution (Chat vs. Application).
-*   **`tools/`**: Specialized utilities.
+*   **`utils/`**: Specialized utilities.
     *   `ResumeParser`: Handles LaTeX parsing and section extraction.
-    *   `JobScraper`: Extracts clean text from job posting URLs.
-    *   `PDFGenerator`: Compiles LaTeX to PDF.
+    *   `Reader`: Class to read data
+    *   `web_crawler`: Extracts job description from url
 *   **`services/`**: External integrators.
     *   `LLMService`: Unified interface for Ollama/OpenAI.
-    *   `OverleafService`: Manages authentication and file retrieval from Overleaf.
 
 ## 🗺️ Roadmap
 
 *   [ ] **Refactor to Multi-file Structure**: Move from a monolithic notebook to a modular Python package structure (Agents, Tools, Nodes).
 *   [ ] **Enhanced Error Handling**: Improve resilience for network requests and LLM failures.
-*   [ ] **Web UI**: Create a simple frontend for easier interaction.
 *   [ ] **More Job Board Support**: Expand parsing capabilities for various job sites.
