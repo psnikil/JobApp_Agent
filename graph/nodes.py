@@ -16,6 +16,7 @@ from utils.resume_parser import ResumeParser
 from markitdown import MarkItDown
 from Markdown2docx import Markdown2docx
 import pypandoc
+from utils.asr import Asr
 
 
 class GraphState(TypedDict):
@@ -47,6 +48,7 @@ class Nodes:
         config = OllamaConfig()
         # can create multiple instances for difference LLMs
         self.llm = OllamaClient(config)
+        self.asr = Asr()
 
     def chat(self,state:GraphState) -> GraphState: # maybe look into if we need to pass state as an argument
         """
@@ -250,6 +252,23 @@ class Nodes:
 
         self.state = state
         return state
+
+    def transcription_task(self,state:GraphState)-> GraphState:
+        print("---TRANSCRIPTION TASK---")
+        load_dotenv()
+        video_path = os.getenv('VIDEO_PATH', 'video.mp4')
+        query = state['query']
+        audio_file = self.asr.extract_audio_ffmpeg(video_path)
+        transcription = self.asr.transcribe(audio_file)
+        print(f'The transcription is: \n {transcription["text"]}')
+        answer = self.llm.transcript_llm_f(query, transcription['text'])
+        state['generation'] = answer
+        print(f'The answer through the transcription node is: \n {answer}')
+
+        return state
+        
+
+
 
 
 

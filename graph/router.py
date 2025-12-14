@@ -61,6 +61,9 @@ class Router:
         elif source.Tool_use == "internal_knowledge":
             print("---ROUTE QUESTION TO INTERNAL KNOWLEDGE---")
             return "internal_knowledge"
+        elif source.Tool_use == "Transcription":
+            print("---ROUTE QUESTION TO TRANSCRIPTION---")
+            return "transcription"
         elif source.Tool_use == "None":
             print("---NO JD URL, END AGENT---")
             return "end"

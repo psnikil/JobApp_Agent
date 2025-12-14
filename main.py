@@ -46,6 +46,7 @@ def build_graph():
     workflow.add_node("update_resume", workflow_nodes.update_resume)
     workflow.add_node("update_latex", workflow_nodes.update_latex) #updates and generates the latex file
     workflow.add_node("update_cover_letter", workflow_nodes.update_cover_letter)
+    workflow.add_node("transcription_task", workflow_nodes.transcription_task)
 
 
     # Build the graph
@@ -55,6 +56,7 @@ def build_graph():
         {
             "update_documents": "get_data",
             "internal_knowledge": "chat",
+            "transcription": "transcription_task",
             "end": END,
         },
     )
@@ -65,6 +67,7 @@ def build_graph():
         {
             "internal_knowledge": END,
             "update_documents": END,
+            "transcription": END,
             "end": END,
         },
     )
@@ -73,6 +76,7 @@ def build_graph():
     workflow.add_edge("summarise_projects", "update_resume")
     workflow.add_edge("update_resume", "update_latex")
     workflow.add_edge("update_latex", "update_cover_letter")
+    workflow.add_edge("transcription_task", END)
 
     # Compile
     app = workflow.compile()
@@ -90,7 +94,8 @@ def build_graph():
 
 if __name__ == "__main__":
     agent = build_graph()
-    inputs = {"query": "I am applying for this job https://ohme-ev.com/job-postings/?gh_jid=4694069101&gh_src=05b7581f6us"}
+    # "I am applying for this job https://ohme-ev.com/job-postings/?gh_jid=4694069101&gh_src=05b7581f6us"
+    inputs = {"query": "Can you give me a summary of the video?"}
     for output in agent.stream(inputs):
         for key, value in output.items():
             # Node

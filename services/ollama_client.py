@@ -34,13 +34,13 @@ class OllamaModelConfig(BaseModel):
 class RouteQuery(BaseModel):
     """Route a user query to the most relevant Option out of the given:
         * internal knowledge
-        * job description
-        * overleaf resume
+        * update_documents
+        * transcription
     """
 
-    Tool_use: Literal["update_documents", "internal_knowledge", "None"] = Field(
+    Tool_use: Literal["update_documents", "internal_knowledge", "None","Transcription"] = Field(
         ...,
-        description="Given a user prompt choose to route it to job description or overleaf resume or use the LLMs internal knowledge.",
+        description="Given a user prompt choose to route it to job description or overleaf resume, transcription or use the LLMs internal knowledge.",
     )
         
 
@@ -381,13 +381,15 @@ class OllamaClient:
         structured_llm_router = router_llm.with_structured_output(RouteQuery)
 
         system = '''
-                    You are an expert at routing a user question to either "update documents" tool or use internal knowledge.
+                    You are an expert at routing a user question to either "update documents" tool, "transcription" tool or use internal knowledge.
                     The update_documents tool is for updating the user resume and cover letter when the user provides a valid URL of the job description.
+                    The transcription tool is for transcribing a video file  ans answering the user query based on the transcription.
                     Follow these rules when choosing the tool to use:
                     - If the user query is related to a job application, a valid URL has to be provided. If no URL respond with "None".
                     - If the user query is related to the user's resume, respond with "update_documents".
                     - if the question is general and not related to the user's resume or job application, respond with "internal_knowledge".
-                    Respond with "update_documents" or "internal_knowledge" or "None" only.
+                    - if the question is requires transcription of video file  respond with "transcription".
+                    Respond with "update_documents" or "internal_knowledge" or "None" or "transcription" only.
                     '''
 
         route_prompt = ChatPromptTemplate.from_messages(
@@ -405,6 +407,43 @@ class OllamaClient:
 
         return route
 
+    def transcript_llm_f(self, query: str, transcript: str)-> str:
+        """
+        This function uses LLM to generate a response to the user query based on the video transcript.
+
+        Args:
+            query (str): The user query.
+            transcript (str): The transcript of the conversation.
+
+        Returns:
+            str: The response to the user query.
+        """
+
+        transcript_llm = ChatOpenAI(
+                api_key="ollama",
+                model= self.config.model,
+                base_url=self.config.api_url,
+                temperature=0.5,
+                stream_usage=True,
+            )
+
+        transcript_system_prompt = f"""
+        You are an expert at generating a response to a user query based on the video transcript.
+        The video transcript is: {transcript}
+        The user query is: {query}
+        Generate a response to the user query based on the video transcript.
+        """
+        transcript_prompt = ChatPromptTemplate.from_messages(
+            [
+                SystemMessage(content=transcript_system_prompt),
+                HumanMessage(content=query)
+            ]
+        )
+        transcript_llm_chain = transcript_prompt | transcript_llm | StrOutputParser()
+        transcript = transcript_llm_chain.invoke({"query": query, "transcript": transcript})
+        return transcript
+
+        
 if __name__ == "__main__":
     llm_config = OllamaConfig()
     llm = OllamaClient(llm_config)
