@@ -112,11 +112,26 @@ class extract_jd:
             "what you will do", "about the role", "job description"
         ]
 
+        self.stop_phrases = [
+            "about the company",
+            "company overview",
+            "similar jobs",
+            "recommended jobs",
+            "people also viewed",
+            "more jobs",
+            "explore more roles",
+            "other jobs you may be interested in",
+        ]
+
         self.score_len_multiplier = 1/200.0
 
         self.job_keywords_multiplier = 0.5
 
         self.list_item_bonus = 0.5
+
+        self.score_threshold = 1.0
+
+        self.fallback1_para = 3
 
     def fetch_rendered_html(self,url:str) -> str:
         """
@@ -216,27 +231,28 @@ class extract_jd:
 
         # keyword score
         keyword_hits = sum(1 for keyword in self.job_keywords if keyword in text)
-        score += keyword_hits * self.job_keywords_multiplier  # each keyword adds 0.5 to the score
+        score += (keyword_hits * self.job_keywords_multiplier)  # each keyword adds 0.5 to the score
 
 
         if section['element'].find_all("li"):
             score += self.list_item_bonus  # bonus for having list items
 
         return score
-
-    def pick_best_section(self, sections:list) -> dict|None:
+    # TODO: define the fallback strat to be a class of str options
+    def pick_best_section(self, sections:list, fallback_strat:str|None = None) -> tuple:
         """
         Picks the best section for the URL based on the scores of each section 
 
         Args:
             sections (list): A list of dictionaries with section titles and their content
+            fallback_strat (str): Fallback strategy to follow
 
         Returns:
             dict|None: The best section dictionary or None if no sections found
         """
 
         if not sections:
-            return None
+            return (0,None)
         
         scored  = [
             (self.score_section(section), section) for section in sections
@@ -244,24 +260,167 @@ class extract_jd:
 
         scored.sort(key=lambda x: x[0], reverse=True)
         print("the number of sections scored are ", len(scored))
-        return scored[0][1]
+        # print(f"the scored sections are {scored}")
+
+        if fallback_strat == None:
+            return scored[0]
+        elif fallback_strat == 'Merge_Sections':
+            combined_section = ""
+            for i in range(self.fallback1_para):
+                combined_section = combined_section + scored[i][1]
+                return (self.score_section(combined_section), combined_section)
+        elif fallback_strat == 'Keyword_Window':
+            pass
+
+        return scored[0]
+
+    def split_into_paragraphs(self, element) -> list[str]:
+        """
+        This function splits the give text into paragraphs
+        
+        Args:
+            element:  elements of the HTML page
+
+        Returns:
+            List(str): This is the list of paragraphs
+        """
+        paragraphs = []
+
+        for child in element.find_all(["p", "li", "div"], recursive=True):
+            text = child.get_text(strip=True)
+            if len(text.split()) >= 5:  # ignore tiny noise
+                paragraphs.append(text)
+
+        return paragraphs
+    
+    def trim_by_stop_phrases(self,paragraphs: list[str]) -> list[str]:
+        """
+        This function trims the paragraphs based on the stop phrases
+        
+        Args:
+            paragraphs(List(str)):  List of the paragraphs
+
+        Returns:
+            List(str): This is the list of trimmed paragraphs
+        """
+
+        trimmed = []
+        c = 0
+
+        for para in paragraphs:
+                para_lower = para.lower()
+
+                for stop in self.stop_phrases:
+                    idx = para_lower.find(stop)
+                    if idx != -1:
+                        # Keep text BEFORE the stop phrase
+                        trimmed_text = para[:idx].strip()
+                        if trimmed_text:
+                            trimmed.append(trimmed_text)
+                        return trimmed  # stop completely
+
+                trimmed.append(para)            
+        c+=1
+        print(f'the number of paras appended in stop phrases is : {c}')
+        return trimmed
+
+    def trim_by_density(self,paragraphs: list[str], window: int = 3) -> list[str]:
+        """
+        This function trims the paragraphs based on their deist
+        
+        Args:
+            paragraphs(List(str)):  List of the paragraphs
+
+        Returns:
+            List(str): This is the list of trimmed paragraphs        """
+        c = 0
+        if len(paragraphs) < window + 1:
+            return paragraphs
+
+        trimmed = []
+        recent_lengths = []
+
+        for para in paragraphs:
+            word_count = len(para.split())
+            recent_lengths.append(word_count)
+
+            if len(recent_lengths) > window:
+                recent_lengths.pop(0)
+                avg = sum(recent_lengths) / window
+
+                # Detect sudden density collapse
+                if word_count < 0.4 * avg:
+                    continue
+
+            trimmed.append(para)
+            c+=1
+        print(f'the number of paras appended in density is : {c}')
+
+        return trimmed
+
+    def trim_job_description(self,element) -> str:
+        """
+        This function trims the job description
+        
+        Args:
+            element:  elements of the HTML page
+
+        Returns:
+            str: The trimmed job description
+        """
+
+        paragraphs = self.split_into_paragraphs(element)
+        print(f'the length of paragraph after splitting is {len(paragraphs)}')
+
+        paragraphs = self.trim_by_stop_phrases(paragraphs)
+        print(f'the length of paragraph after trimming by stop words is {len(paragraphs)}')
+        paragraphs = self.trim_by_density(paragraphs)
+        print(f'the length of paragraph after splitting by density is {len(paragraphs)}')
+
+        return "\n\n".join(paragraphs)
+
 
     def run_extraction(self,url:str) -> dict:
+        """
+        This function runs the jd extraction pipeline 
+
+        Args:
+            url(str): URL of the JD 
+
+        Return:
+            extracted_jd(dict): dict containing the extracted JD and confidence
+        """
+
         html = self.fetch_rendered_html(url)
         print(f'the len of the HTML is {len(html)}')
         soup = self.clean_html(html)
         sections = self.extract_sections(soup)
-        best = self.pick_best_section(sections)
+        print(f'the number of sections are: {len(sections)}')
+        best_score, best_content = self.pick_best_section(sections)
+        print(f'the best score is {best_score}')
 
+        # fallback if the score is too low
+        if best_score < self.score_threshold:
+            # checking if best content is not None
+            if best_content:
+                print(f"going into fallback - Merge Sections")
+                # fallback best scores and content
+                best_score, best_content = self.pick_best_section(sections,'Merge_Sections')
+            # TODO: Add error handling if there is no content
+
+        job_text = self.trim_job_description(best_content["element"])
+        print(len(job_text))
+        
         return {
-            "job_description": best["text"] if best else "",
-            "confidence": 0.0 if not best else min(1.0, self.score_section(best) / 3),
+            "job_description": job_text if job_text else "",
+            "confidence": 0.0 if not best_score else min(1.0, (best_score / 3)),
             "source_url": url
         }
 
 
 if __name__ == "__main__":
     url = "https://save-my-exams.careers.hibob.com/jobs/533866e8-6a9a-4687-9ae4-110c75301e38"
+    # url = "https://www.linkedin.com/jobs/view/4343656695/?alternateChannel=search&eBP=CwEAAAGbRhf-831qvZWaFFeXziqsQwm4-bUgRovYTV30Zfu6VsgNjzzv1rc62x_3dDi_7-n47mZ7YYwpnt3HH4v8MCUqwf8uR1bIn8ixbAkR2pKxcsSmOQgHaD9LoHp6WLt2Jz9S2syAgv8GPMbL6JHqamCAHiRjRpiRUNaN-GZL8vnTbV1VU_yFnoiS9UROVlqNec0UFZOSOhdDwP6VQR4Z06HX_8_D5HHlZepWQusr68D6OgXlL2UeanhvCMot6sLTwLnG8kEPUlIA7kpd6SeC8ncUMpgajC7-H3MW-Bna6MGhZBi8R6g-Zw4LCmM3BM3R9BEIUMgOVb_BJJJHjCIiF9bjSfKnA95KtMk0AAu7s4D9aLUhXml2JismjBcAMyRWWuyQjqeVwrGv0Avvn6GrRwxsgeF-lvl-UXB6drgWLFHbO5RMxDhmzIptldTAThAEp85UwLvDaikS76xnyzrMQkuGMEJ7QEVogmWTACai&refId=hwqwjfaI0NF7XnV7JfwQ4A%3D%3D&trackingId=ffTPuqA5O0QZWRMzxtH2Dw%3D%3D&trk=d_flagship3_job_collections_discovery_landing"
     crawler = extract_jd()
     jd = crawler.run_extraction(url)
     print(jd)
