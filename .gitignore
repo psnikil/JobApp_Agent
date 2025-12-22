@@ -6,3 +6,6 @@ JobApp_Agent.ipynb
 ./services/__pycache__/
 ./utils/__pycache__/
 data/
+agent/
+agents/
+requirements_windows.txt

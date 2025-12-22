@@ -83,6 +83,6 @@ We aim to refactor the monolithic notebook into the following atomic packages:
 
 ## 🗺️ Roadmap
 
-*   [ ] **Refactor to Multi-file Structure**: Move from a monolithic notebook to a modular Python package structure (Agents, Tools, Nodes).
-*   [ ] **Enhanced Error Handling**: Improve resilience for network requests and LLM failures.
-*   [ ] **More Job Board Support**: Expand parsing capabilities for various job sites.
+*   [ ] **Update the we scraper tool**: MModify the web scarper tool to extract the JD more eaccurately and efficiently .
+*   [ ] **Support for multiple models**: Add support for the use of different models for different tasks
+*   [ ] **Update the workflow**: update the flow such that an orchestrator agent can dynamically choose the required tools/state the agent should visit 
