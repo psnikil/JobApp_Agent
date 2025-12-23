@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from typing import TypedDict
 
 from utils.reader import Reader
-from utils.web_crawler import web_crawler
+from utils.web_crawler import web_crawler,extract_jd
 from utils.resume_parser import ResumeParser
 
 from markitdown import MarkItDown
@@ -120,7 +120,7 @@ class Nodes:
                 print(f"No README.md found for {project}/n")
             else:
                 summary = self.llm.summaries_readme_llm_f(project_data[project],project)
-                # print(f'the state after summry is {state["generation"]}')
+                # print(f'the state after summary is {state["generation"]}')
                 summarized_content = summarized_content + "\n" + summary
                 # print(f"Project summary: {state['project_content']},\n the project is {project} \n")
         state["project_content"] = summarized_content
@@ -129,7 +129,7 @@ class Nodes:
 
     def update_resume(self,state:GraphState):
         """
-        This function updates the resume based on the retrived old resume, jd and projects
+        This function updates the resume based on the retrieved old resume, jd and projects
 
         Args:
             state (dict): The current graph state

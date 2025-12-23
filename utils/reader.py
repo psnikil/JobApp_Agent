@@ -2,7 +2,7 @@
 from dotenv import load_dotenv, dotenv_values 
 import os
 from utils.resume_parser import ResumeParser
-from utils.web_crawler import web_crawler
+from utils.web_crawler import web_crawler,extract_jd
 import pyoverleaf
 import zipfile
 import re
@@ -12,6 +12,7 @@ class Reader:
     def __init__(self):
         # self.file_path = file_path
         pass
+        
     # def read_readme(self):
     #     project_data = {}
     #     if os.path.exists(self.file_path) and os.path.isdir(self.file_path):
@@ -140,7 +141,7 @@ class Reader:
 
     def extract_jd(query:str)->str:
         """ 
-        Extract the job descrption from the extracted url from the user prompt
+        Extract the job description from the extracted url from the user prompt
 
         Args:
             query (str): The user query
@@ -154,14 +155,12 @@ class Reader:
         print(f"URL pattern match is : {match.group(0)}")
         if match:
             url = match.group(0)
-            jd_data = web_crawler.extract_body_content(url)
+            # init the extract jd class
+            jd_extractor = extract_jd()
+            jd_data =  jd_extractor.run_extraction(url=url)#web_crawler.extract_body_content(url)
         else:
             url = None
-
-        # url = "https://logically.bamboohr.com/careers/25"
-        # print(f"Job description is : {jd_data}")
-
-        
+       
 
         return jd_data or "No Job description found"
 

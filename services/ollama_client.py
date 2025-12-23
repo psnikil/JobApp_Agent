@@ -7,19 +7,24 @@ from langchain_openai import ChatOpenAI
 from langchain_core.documents import Document
 from pydantic import BaseModel, Field
 from langchain_core.output_parsers import StrOutputParser
+import os
 
 
 """
-Make all fucntions to be able o be used a tools for LLMs orchestrator   
+Make all functions to be able o be used a tools for LLMs orchestrator   
 """
 
 
-# TODO: make a general class for config of LLM , then make two classes that inherite the llm class
-#  One should be a stochastic generator, and the other the detetermistic generator
+# TODO: make a general class for config of LLM , then make two classes that inherit the llm class
+#  One should be a stochastic generator, and the other the deterministic generator
 # this is to split 'nodes' from 'routers'
 
+# Get the ollama model from the .env file
+# DEFAULT MODEL REQUIRES A 16GB GPU OR 16GB OF RAM
+ollama_model  = os.getenv('OLLAMA_MODEL', 'gpt-oss')
+
 class OllamaConfig(BaseSettings):
-    model: str = "gpt-oss"
+    model: str = ollama_model
     api_url: str = "http://localhost:11434/v1"
     temperature: float = 0.7
 
@@ -48,7 +53,7 @@ class OllamaClient:
     def __init__(self, config: OllamaConfig):
         self.config = config
 
-        # TODO: understand if config llm them modify for each fucntion or config llm for each function
+        # TODO: understand if config llm them modify for each function or config llm for each function
 
 
     def chat_llm_f(self, query:str) -> str:
@@ -72,7 +77,7 @@ class OllamaClient:
                 )
 
         system_prompt = '''
-                        You are an helpful and knowledgeable assistant. Help the user by asnwer their questions.
+                        You are an helpful and knowledgeable assistant. Help the user by answer their questions.
                         '''
         # question = 'How are you?'
         # print("the query is: ", query)
@@ -158,7 +163,7 @@ class OllamaClient:
         """
         resume_content_len = len(resume_content)
         tokens = int(resume_content_len / 4.0)
-        # adding padding so the ouput limit is not an hard restriction
+        # adding padding so the output limit is not an hard restriction
         tokens = int(tokens*1.15)
         update_resume_llm = ChatOpenAI(
                     api_key="ollama",
@@ -227,13 +232,13 @@ class OllamaClient:
                                 You are an expert in extracting the resume content from the given resume.
                                 You are given the resume in latex format.
                                 Your job is to extract the content of resume and return only the content as string.
-                                The formart returned should have header for each setion of the resume followed by the content of the section.
+                                The format returned should have header for each section of the resume followed by the content of the section.
                                 Do not include any formatting or structure or latex syntax of the resume in the returned content.
                                 """
         query_content = f"""
                         The resume is:```{resume_content}```.
                         Extract the content of the resume and return only the content as string.
-                        The formart returned should have header for each setion of the resume followed by the content of the section.
+                        The format returned should have header for each section of the resume followed by the content of the section.
                         Do not include any formatting or structure or latex syntax of the resume in the returned content.
                         """
         extract_resume_prompt = ChatPromptTemplate.from_messages(
@@ -248,7 +253,7 @@ class OllamaClient:
 
         return extracted_resume
 
-    # fucntion to update the content of latex code without touching the sytax, formatting, etc
+    # function to update the content of latex code without touching the syntax, formatting, etc
     def update_latex_llm_f(self, latex_content:str, updated_section_content:tuple) -> str:
         """
         This function updates the content of the latex code without 
@@ -263,7 +268,7 @@ class OllamaClient:
         """
         latex_content_len = len(latex_content)
         tokens = int(len(latex_content) / 4.0)
-        # adding padding so the ouput limit is not an hard restriction
+        # adding padding so the output limit is not an hard restriction
         tokens = int(tokens*1.15)
         update_latex_llm = ChatOpenAI(
                     api_key="ollama",
@@ -274,11 +279,11 @@ class OllamaClient:
                 )
         resume_section, updated_content = updated_section_content
         update_latex_system_prompt = """
-                                You are an expert is modifying the contents of the larex section without touching the formatting or structure of the latex file.
+                                You are an expert is modifying the contents of the latex section without touching the formatting or structure of the latex file.
                                 You are given a section of the users resume in latex.
                                 You are given the updated content of the same section in plain text/markdown format.
-                                If the provided section such as name, email, phone number, linkedin profile link, etc which are unlikly to change, do not modify.
-                                Your job is to modify the latext content without touching the formatting, syntax or structure of the latex file.
+                                If the provided section such as name, email, phone number, linkedin profile link, etc which are unlikely to change, do not modify.
+                                Your job is to modify the latex content without touching the formatting, syntax or structure of the latex file.
                                 The returned content should be in the same format as the input latex content.
                                 """
         query_content = f"""
@@ -335,7 +340,7 @@ class OllamaClient:
                                 Instructions:
                                 1. Your job is to update the cover letter based on the resume content, project content and the job description.
                                 2. The length should not exceed 1 page.
-                                3. Do not add any new infomation not present in the resume content, project content and job description
+                                3. Do not add any new information not present in the resume content, project content and job description
                                 4. Base your updates to the cover letter based on the key requirements of the job description.
                                 5. The cover letter should pass the ATS check and should be optimized for job success rate.
                                 6. The returned content should be in the same format as the input cover letter content.
@@ -445,6 +450,7 @@ class OllamaClient:
 
         
 if __name__ == "__main__":
+    # to check if the ollama model is configured correctly
     llm_config = OllamaConfig()
     llm = OllamaClient(llm_config)
     ans = llm.chat_llm_f("Hello, how are you")

@@ -30,6 +30,7 @@ Before running the agent, ensure you have the following installed:
 *   **Ollama**: Installed and running locally (default url: `http://localhost:11434`).
 *   **LaTeX Distribution**: `pdflatex` must be installed on your system (e.g., TeX Live) for PDF generation.
 *   **Poppler**: For PDF processing (if required).
+*  **Playright** has to be installed. After installing playright from pip, run: ``` python3 -m playright ```p
 
 ## ⚙️ Configuration
 
@@ -47,6 +48,9 @@ COVER_LETTER_PATH=/path/to/your/cover_letter.docx
 
 # Overleaf Credentials (if fetching from Overleaf)
 DATA_FOLDER=/path.to/data/folder
+
+# Ollama model name
+OLLAMA_MODEL="Model_name"
 ```
 
 ## 🏃 Usage
@@ -83,6 +87,6 @@ We aim to refactor the monolithic notebook into the following atomic packages:
 
 ## 🗺️ Roadmap
 
-*   [ ] **Update the we scraper tool**: MModify the web scarper tool to extract the JD more eaccurately and efficiently .
+*   [ ] **Update the we scraper tool**: MModify the web scarper tool to extract the JD more accurately and efficiently .
 *   [ ] **Support for multiple models**: Add support for the use of different models for different tasks
 *   [ ] **Update the workflow**: update the flow such that an orchestrator agent can dynamically choose the required tools/state the agent should visit 

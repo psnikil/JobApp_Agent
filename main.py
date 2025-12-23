@@ -8,6 +8,9 @@ from typing import List
 from pprint import pprint
 import io
 from PIL import Image
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # class GraphState(TypedDict):
 #     """
