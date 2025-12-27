@@ -5,6 +5,7 @@ import re
 from bs4 import BeautifulSoup
 
 from playwright.sync_api import sync_playwright
+from playwright.async_api import async_playwright
 
 class web_crawler:
     def __init__(self,url:str):
@@ -133,23 +134,23 @@ class extract_jd:
 
         self.fallback1_para = 3
 
-    def fetch_rendered_html(self,url:str) -> str:
+    async def fetch_rendered_html(self,url:str) -> str:
         """
         Fetches the fully rendered HTML content of the given URL using 
         playright to handle the JS rendering.
         """
 
         try:
-            with sync_playwright() as p:
-                browser = p.chromium.launch(headless=True)
-                page =  browser.new_page()
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(headless=True)
+                page =  await browser.new_page()
 
-                page.goto(url, timeout=30000)
-                page.wait_for_selector("body")
-                page.wait_for_timeout(2000)  # allow for JS to settle
+                await page.goto(url, timeout=30000)
+                await page.wait_for_selector("body")
+                await page.wait_for_timeout(2000)  # allow for JS to settle
 
-                html = page.content()
-                browser.close()
+                html = await page.content()
+                await browser.close()
                 return html
         except Exception as e:
             print('Error fetching rendered HTML:', e)
@@ -380,7 +381,7 @@ class extract_jd:
         return "\n\n".join(paragraphs)
 
 
-    def run_extraction(self,url:str) -> dict:
+    async def run_extraction(self,url:str) -> dict:
         """
         This function runs the jd extraction pipeline 
 
@@ -391,7 +392,7 @@ class extract_jd:
             extracted_jd(dict): dict containing the extracted JD and confidence
         """
 
-        html = self.fetch_rendered_html(url)
+        html = await self.fetch_rendered_html(url)
         print(f'the len of the HTML is {len(html)}')
         soup = self.clean_html(html)
         sections = self.extract_sections(soup)
@@ -419,7 +420,7 @@ class extract_jd:
 
 
 if __name__ == "__main__":
-    url = "https://save-my-exams.careers.hibob.com/jobs/533866e8-6a9a-4687-9ae4-110c75301e38"
+    url = "https://www.worldquant.com/career-listing/?id=4408985006&source=c8fd37dd6us"
     # url = "https://www.linkedin.com/jobs/view/4343656695/?alternateChannel=search&eBP=CwEAAAGbRhf-831qvZWaFFeXziqsQwm4-bUgRovYTV30Zfu6VsgNjzzv1rc62x_3dDi_7-n47mZ7YYwpnt3HH4v8MCUqwf8uR1bIn8ixbAkR2pKxcsSmOQgHaD9LoHp6WLt2Jz9S2syAgv8GPMbL6JHqamCAHiRjRpiRUNaN-GZL8vnTbV1VU_yFnoiS9UROVlqNec0UFZOSOhdDwP6VQR4Z06HX_8_D5HHlZepWQusr68D6OgXlL2UeanhvCMot6sLTwLnG8kEPUlIA7kpd6SeC8ncUMpgajC7-H3MW-Bna6MGhZBi8R6g-Zw4LCmM3BM3R9BEIUMgOVb_BJJJHjCIiF9bjSfKnA95KtMk0AAu7s4D9aLUhXml2JismjBcAMyRWWuyQjqeVwrGv0Avvn6GrRwxsgeF-lvl-UXB6drgWLFHbO5RMxDhmzIptldTAThAEp85UwLvDaikS76xnyzrMQkuGMEJ7QEVogmWTACai&refId=hwqwjfaI0NF7XnV7JfwQ4A%3D%3D&trackingId=ffTPuqA5O0QZWRMzxtH2Dw%3D%3D&trk=d_flagship3_job_collections_discovery_landing"
     crawler = extract_jd()
     jd = crawler.run_extraction(url)

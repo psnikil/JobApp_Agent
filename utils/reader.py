@@ -40,7 +40,7 @@ class Reader:
     #     return project_data
 
     # Function to get the resume from overleaf or local tex file
-    def get_resume():
+    def get_resume()->dict|None:
         """ 
         Get the resume from overleaf using user defined ENV variables or local .tex file.
         If the .tex file does not exist locally, fetch it from Overleaf.
@@ -54,6 +54,7 @@ class Reader:
 
         # Check if the active folder and resume.tex file is specified in .env
         resume_path = os.getenv('RESUME_PATH', './data/resume.tex')
+        data_path = os.getenv('DATA_PATH', './data/')
         print(f"Resume path is : {resume_path}")
         parser = ResumeParser()
 
@@ -139,7 +140,7 @@ class Reader:
 
         return project_data
 
-    def extract_jd(query:str)->str:
+    async def extract_jd(query:str)->str:
         """ 
         Extract the job description from the extracted url from the user prompt
 
@@ -157,12 +158,13 @@ class Reader:
             url = match.group(0)
             # init the extract jd class
             jd_extractor = extract_jd()
-            jd_data =  jd_extractor.run_extraction(url=url)#web_crawler.extract_body_content(url)
+            jd_data_dict =  await jd_extractor.run_extraction(url=url)#web_crawler.extract_body_content(url)
+
         else:
             url = None
        
 
-        return jd_data or "No Job description found"
+        return jd_data_dict['job_description'] or "No Job description found"
 
 
 

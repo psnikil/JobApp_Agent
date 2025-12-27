@@ -28,7 +28,13 @@ Before running the agent, ensure you have the following installed:
 
 *   **Python 3.10+**
 *   **Ollama**: Installed and running locally (default url: `http://localhost:11434`).
-*   **LaTeX Distribution**: `pdflatex` must be installed on your system (e.g., TeX Live) for PDF generation.
+*   **LaTeX Distribution**: `pdflatex` must be installed on your system (e.g., TeX Live) for PDF generation.For installation of the libraries use in linux ```sudo apt install texlive``` then depending on the libraries you would like to install 
+``` sudo apt install texlive-recommended
+# or 
+sudo apt install texlive-base
+# or
+sudo apt install texlive-full```
+
 *   **Poppler**: For PDF processing (if required).
 *  **Playright** has to be installed. After installing playright from pip, run: ``` python3 -m playright ```p
 

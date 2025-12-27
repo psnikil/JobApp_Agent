@@ -50,6 +50,7 @@ def build_graph():
     workflow.add_node("update_latex", workflow_nodes.update_latex) #updates and generates the latex file
     workflow.add_node("update_cover_letter", workflow_nodes.update_cover_letter)
     workflow.add_node("transcription_task", workflow_nodes.transcription_task)
+    workflow.add_node("extract_jd_key_words", workflow_nodes.extract_jd_keywords)
 
 
     # Build the graph
@@ -76,7 +77,8 @@ def build_graph():
     )
 
     workflow.add_edge("get_data", "summarise_projects")
-    workflow.add_edge("summarise_projects", "update_resume")
+    workflow.add_edge("summarise_projects","extract_jd_key_words")
+    workflow.add_edge("extract_jd_key_words", "update_resume")
     workflow.add_edge("update_resume", "update_latex")
     workflow.add_edge("update_latex", "update_cover_letter")
     workflow.add_edge("transcription_task", END)
@@ -84,8 +86,6 @@ def build_graph():
     # Compile
     app = workflow.compile()
 
-
-    app = workflow.compile()
     # debug to check the flow of the agent
     # graph_png_bytes = app.get_graph().draw_mermaid_png()
     # img = Image.open(io.BytesIO(graph_png_bytes))
