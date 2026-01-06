@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 import os
 import ast
 import re
+import json
 # import llm client
 from services.ollama_client import OllamaClient, OllamaConfig
 from typing import List  
@@ -12,6 +13,7 @@ from typing import TypedDict
 from utils.reader import Reader
 from utils.web_crawler import web_crawler,extract_jd
 from utils.resume_parser import ResumeParser
+from utils.latex_helper import Latex_helper
 
 from markitdown import MarkItDown
 from Markdown2docx import Markdown2docx
@@ -88,7 +90,8 @@ class Nodes:
 
         query = state["query"]
         # have to use these as helper functions/ aka tools
-        state['resume_content'] = Reader.get_resume()
+        resume_content = Reader.get_resume()
+        state['resume_content'] = resume_content
         state['jd_content'] = await Reader.extract_jd(query)
         self.state = state
         return state
@@ -114,18 +117,23 @@ class Nodes:
         print(f"Project data: {project_data}")
         # state['project_content'] = project_data
 
-        summarized_content = ''
+        summarized_content = {}
         for project in project_data:
             if project_data[project] == "No README.md" or not project_data[project]:
-                print(f"No README.md found for {project}/n")
-                # continue
+                print(f"No README.md found for {project} \n ")
+                continue
                 
             else:
                 summary = self.llm.summaries_readme_llm_f(project_data[project],project)
                 # print(f'the state after summary is {state["generation"]}')
-                summarized_content = summarized_content + "\n" + summary
-                # print(f"Project summary: {state['project_content']},\n the project is {project} \n")
-        state["project_content"] = summarized_content
+                json_summary = summary.model_dump()
+                content = ''
+                for key,value in json_summary.items():
+                    content+= f'{key}: {value} \n'
+                summarized_content[project] = content
+
+        # TODO: check if the dict is empty , otherwise say "No project data found"
+        state["project_content"] = json.dumps(summarized_content, ensure_ascii=False, indent=2)
         print(f'The leght of summarised projects is {len(summarized_content)}')
         self.state = state
         return state
@@ -146,8 +154,7 @@ class Nodes:
         # This is the full JD
         jd_content = state['jd_content']
         jd_key_words = self.llm.jd_key_words_resume_llm_f(jd_content)
-
-        state['jd_key_words'] = jd_key_words
+        state['jd_key_words'] = jd_key_words.model_dump_json()
         print(f'the jd key words for resume are: \n {jd_key_words}')
         self.state = state
         return state
@@ -168,8 +175,7 @@ class Nodes:
         # This is the full JD
         jd_content = state['jd_content']
         jd_key_words = self.llm.jd_key_words_cl_llm_f(jd_content)
-
-        state['jd_key_words'] = jd_key_words
+        state['jd_key_words'] = jd_key_words.model_dump_json()
         print(f'the jd key words for cl are: \n {jd_key_words}')
         self.state = state
         return state
@@ -211,10 +217,11 @@ class Nodes:
             if resume_section == 'Header' or resume_section == 'Education':
                 updated_resume[resume_section] = section_content
             else:
-                updated_resume[resume_section] = self.llm.update_resume_llm_f(jd_key_words, project_summaries, section_content,resume_section)
+                response = self.llm.update_resume_llm_f(jd_key_words, project_summaries, section_content,resume_section)
+                updated_resume[resume_section] = response.updated_content
 
         print(f'the updated resume is: \n {updated_resume}')
-        state['generation'] = str(updated_resume)
+        state['generation'] = json.dumps(updated_resume, ensure_ascii=False, indent=2)
         state['resume_content'] = updated_resume
         self.state = state
         return state
@@ -238,26 +245,31 @@ class Nodes:
 
         resume_content = state['resume_content']
         if type(resume_content) == 'str':
-            resume_dict = ast.literal_eval(resume_content)
+            print("resume is a string")
+            # coverting a json str back to dict
+            resume_dict = json.loads(resume_content)
         else:
+            print("resume is a dict")
             resume_dict = resume_content
 
         parser = ResumeParser()
         parser.parse(resume_path)
 
         
-
+        # ignore the header and education section for latex update
         for section, content in resume_dict.items():
+            if section == 'Header' or section == 'Education':
+                print(f"Skipping section {section} for latex update")
+                continue
             section_latex = parser.get_section_latex(section, resume_path)
-            updated_section_latex = self.llm.update_latex_llm_f(section_latex, (section, content))
-            match = re.fullmatch(r'(?:latex)?\s*([\s\S]*?)\s*', updated_section_latex, flags=re.DOTALL)
-            if match:
-                state['generation'] = match.group(1)
-            else:
-                state['generation'] = updated_section_latex
-            
-            print(f'the updated section {section} latex is: \n {updated_section_latex}')
-            parser.update_section(section, state['generation'], True)
+            llm_response = self.llm.update_latex_llm_f(section_latex, (section, content))
+            updated_section_latex = llm_response.latex
+            print(f'the raw updated section {section} is {updated_section_latex} \n')
+            # TODO: add static checks for escape sequences in the updated latex code
+            sanitizer = Latex_helper()
+            sanitized_latex = sanitizer.latex_static_sanitize(updated_section_latex)
+            print(f'the sanitized updated section {section} is {sanitized_latex} \n')
+            parser.update_section(section, sanitized_latex, True)
             
         
         parser.save("./data/resume_updated.tex")
@@ -289,7 +301,8 @@ class Nodes:
         # read the cover letter docx file from the user defined cover letter path in .env
         cover_letter_path = os.getenv('COVER_LETTER_PATH', 'cover_letter.docx')
         md = MarkItDown()
-        cover_letter = md.convert(cover_letter_path)
+        # get only the text content to type check is works
+        cover_letter = (md.convert(cover_letter_path)).text_content
         print(f'the cover letter is: \n {cover_letter}')
         print(f"the len of resume content is: {len(resume_content)}")
         print(f"the len of project content is: {len(project_content)}")

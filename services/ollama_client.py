@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings
-from typing import Literal
+from typing import Literal, List
 from langchain_core.messages import SystemMessage, HumanMessage,AIMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
@@ -47,13 +47,44 @@ class RouteQuery(BaseModel):
         ...,
         description="Given a user prompt choose to route it to job description or overleaf resume, transcription or use the LLMs internal knowledge.",
     )
-        
+
+class jd_keywords_resume(BaseModel):
+    job_title: str = Field(description="Exact job title from the JD")
+    hard_skills: str
+    soft_skills: str
+    tools_and_technologies: str
+    responsibilities: str
+    required_qualifications: str
+    preferred_qualifications: str
+    keywords: str
+
+class jd_keywords_cl(BaseModel):
+    company_name: str = Field(description="Exact company name from the JD")
+    job_title: str = Field(description="Exact job title from the JD")
+    core_skills:str
+    key_responsibilities:str
+    role_focus:str
+
+
+class summarise_projects(BaseModel):
+    description: str = Field(description="Project description summary")
+    tech_stack: str = Field(description="Technologies used in the project")
+    objectives: str = Field(description="Project objectives")
+    challenges_solutions: str = Field(description="Project challenges and solutions")
+
+class latex_resume_updater(BaseModel):
+    latex:str = Field(description="The updated latext content of the resume section")
+
+class resume_section_updater(BaseModel):
+    updated_content:str = Field(description="The updated content of the resume section")
+
 
 class OllamaClient:
     def __init__(self, config: OllamaConfig):
         self.config = config
 
         # TODO: understand if config llm them modify for each function or config llm for each function
+
 
 
     def chat_llm_f(self, query:str) -> str:
@@ -94,7 +125,7 @@ class OllamaClient:
         answer = chat_llm_chain.invoke({"question": query})
         return answer
 
-    def summaries_readme_llm_f(self,content:str, project_name:str) -> str:
+    def summaries_readme_llm_f(self,content:str, project_name:str) -> summarise_projects:
         """
         This function summarizes the README.md file of a project.
 
@@ -113,6 +144,7 @@ class OllamaClient:
                     temperature=0.5,
                     stream_usage=True,
                 )
+        structured_summary_llm = summary_llm.with_structured_output(summarise_projects)
 
         summary_system_prompt = '''
             You are an project summarisation agent
@@ -150,11 +182,11 @@ class OllamaClient:
         summary_prompt = ChatPromptTemplate.from_messages(
             [
                 SystemMessage(content=summary_system_prompt),
-                HumanMessage(content=f"The content to be summarized is:{content}")
+                HumanMessage(content=query_content)
             ]
         )
 
-        summary_llm_chain = summary_prompt | summary_llm | StrOutputParser()
+        summary_llm_chain = summary_prompt | structured_summary_llm 
         summary = summary_llm_chain.invoke({"content": content})
         return summary
 
@@ -162,7 +194,7 @@ class OllamaClient:
     def update_resume_llm_f(self, jd_content:str, 
                             project_content:str, 
                             resume_content:str,
-                            resume_section:str) -> str:
+                            resume_section:str) -> resume_section_updater:
 
         """
         This function updates the resume content based on:
@@ -191,10 +223,11 @@ class OllamaClient:
                     temperature=0.5,
                     stream_usage=True,
                 )
+        structured_update_resume_llm = update_resume_llm.with_structured_output(resume_section_updater)
         # creating a conditional system prompt as smaller models struggle with a generic system prompt
         if resume_section.lower() == 'summary':
             update_resume_system_prompt = f"""
-            You are a resume content optimization agent.
+            You are a resume summary optimization agent.
 
             Your task is to UPDATE the content of GIVEN resume section so it best matches
             a given set of job description keywords, using ONLY information from:
@@ -226,7 +259,7 @@ class OllamaClient:
             """
         elif resume_section.lower() == 'skills and certificates':
             update_resume_system_prompt = f"""
-            You are a resume content optimization agent.
+            You are a resume skills and certificates optimization agent.
 
             Your task is to UPDATE the content of GIVEN resume section so it best matches
             a given set of job description keywords, using ONLY information from:
@@ -242,14 +275,14 @@ class OllamaClient:
             Step 2: Rewrite ALL retained content aggressively to:
             - maximize alignment with job description keywords
             - use ATS-friendly terminology
-            - MAINTAIN THE FORMAT TO THE SAME AS THE INPUT RESUME SECTION
+
 
             CONTENT BUDGET RULE:
             - Do NOT increase the length of the section over {resume_content_len} characters.
-            - Prefer replacement or removal over addition.
+            
 
             Rules:
-            - Do NOT add new sections.
+            - Do NOT remove existing skills or certificates.
             - Do NOT include information not grounded in the inputs.
             - MAINTAIN THE FORMATTING OF THE INPUT RESUME SECTION.
 
@@ -280,16 +313,16 @@ class OllamaClient:
             - maximize alignment with job description keywords
             - use ATS-friendly terminology
             - clearly emphasize impact and responsibilitie
-            - MAINTAIN THE FORMAT TO THE SAME AS THE INPUT RESUME SECTION
+            
 
             CONTENT BUDGET RULE:
             - Do NOT increase the length of the section over {resume_content_len} characters.
             - Prefer replacement or removal over addition.
 
             Rules:
-            - Do NOT add new sections.
             - Deleting bullets is allowed and encouraged when irrelevant.
             - Do NOT include information not grounded in the inputs.
+            - Each bullet point should be concise and impactful.
             - MAINTAIN THE FORMATTING OF THE INPUT RESUME SECTION.
 
             Output ONLY the updated resume section content.
@@ -297,7 +330,7 @@ class OllamaClient:
             """
         elif resume_section.lower() == 'projects':
             update_resume_system_prompt = f"""
-            You are a resume content optimization agent.
+            You are a resume project section content optimization agent.
 
             Your task is to UPDATE the content of GIVEN resume section so it best matches
             a given set of job description keywords, using ONLY information from:
@@ -329,18 +362,15 @@ class OllamaClient:
             - maximize alignment with job description keywords
             - use ATS-friendly terminology
             - clearly emphasize impact and responsibilities
-            - MAINTAIN THE FORMAT TO THE SAME AS THE INPUT RESUME SECTION
 
             CONTENT BUDGET RULE:
             - Do NOT increase the length of the section over {resume_content_len} characters.
             - Prefer replacement or removal over addition.
 
             Rules:
-            - Do NOT change the section name.
-            - Do NOT add new sections.
+            - Each bullet point should be concise and impactful.
             - Deleting projects is allowed and encouraged when irrelevant.
             - Do NOT include information not grounded in the inputs.
-            - MAINTAIN THE FORMATTING OF THE INPUT RESUME SECTION.
 
             Output ONLY the updated resume section content.
             Do NOT include explanations or commentary.
@@ -421,7 +451,7 @@ class OllamaClient:
                 HumanMessage(content=query_content)
             ]
         )
-        update_resume_llm_chain = update_resume_prompt | update_resume_llm | StrOutputParser()
+        update_resume_llm_chain = update_resume_prompt | structured_update_resume_llm 
 
         updated_resume = update_resume_llm_chain.invoke({"resume_content": resume_content, "jd_content": jd_content, "project_content": project_content})
 
@@ -429,7 +459,7 @@ class OllamaClient:
     
     # fucntion to extract the key words from the job description for resume updating
     # TODO: change the return type to be a certain class
-    def jd_key_words_resume_llm_f(self,job_description:str) -> str:
+    def jd_key_words_resume_llm_f(self,job_description:str) -> jd_keywords_resume:
         """
         This fucntion extracts the key words from the job description for resume updating
 
@@ -468,13 +498,13 @@ class OllamaClient:
 
             {
             "job_title": string,
-            "hard_skills": [string],
-            "soft_skills": [string],
-            "tools_and_technologies": [string],
-            "responsibilities": [string],
-            "required_qualifications": [string],
-            "preferred_qualifications": [string],
-            "keywords": [string]
+            "hard_skills": string,
+            "soft_skills": string,
+            "tools_and_technologies": string,
+            "responsibilities": string,
+            "required_qualifications": string,
+            "preferred_qualifications": string,
+            "keywords": string
             }
 
             Definitions:
@@ -498,6 +528,8 @@ class OllamaClient:
             Extract ATS-relevant keywords and requirements following the system instructions.
 
             """
+
+        structured_extract_key_words_llm = extract_key_words_llm.with_structured_output(jd_keywords_resume)
         
         extract_key_words_prompt = ChatPromptTemplate.from_messages(
             [
@@ -505,14 +537,14 @@ class OllamaClient:
                 HumanMessage(content=query_content)
             ]
         )
-        extract_key_words_llm_chain = extract_key_words_prompt | extract_key_words_llm | StrOutputParser()
+        extract_key_words_llm_chain = extract_key_words_prompt | structured_extract_key_words_llm
 
-        extract_key_words = extract_key_words_llm_chain.invoke({"resume_content": job_description})
+        extract_key_words = extract_key_words_llm_chain.invoke({"job_description": job_description})
 
         return extract_key_words
 
 
-    def jd_key_words_cl_llm_f(self,job_description:str) -> str:
+    def jd_key_words_cl_llm_f(self,job_description:str) -> jd_keywords_cl:
         """
         This fucntion extracts the key words from the job description for cover letter updating
 
@@ -530,6 +562,7 @@ class OllamaClient:
             temperature=0.0,
             stream_usage=True,
         )
+        structured_extract_key_words_llm = extract_key_words_llm.with_structured_output(jd_keywords_cl)
 
         extract_key_words_system_prompt = """
             You are a cover letter focus extraction agent.
@@ -550,9 +583,10 @@ class OllamaClient:
             Return the output in the following JSON format:
 
             {
+            "company_name":string,
             "job_title": string,
-            "core_skills": [string],
-            "key_responsibilities": [string],
+            "core_skills": string,
+            "key_responsibilities": string,
             "role_focus": string
             }
 
@@ -580,7 +614,7 @@ class OllamaClient:
                 HumanMessage(content=query_content)
             ]
         )
-        extract_key_words_llm_chain = extract_key_words_prompt | extract_key_words_llm | StrOutputParser()
+        extract_key_words_llm_chain = extract_key_words_prompt | structured_extract_key_words_llm 
 
         extract_key_words = extract_key_words_llm_chain.invoke({"resume_content": job_description})
 
@@ -633,7 +667,7 @@ class OllamaClient:
         return extracted_resume
 
     # function to update the content of latex code without touching the syntax, formatting, etc
-    def update_latex_llm_f(self, latex_content:str, updated_section_content:tuple) -> str:
+    def update_latex_llm_f(self, latex_content:str, updated_section_content:tuple) -> latex_resume_updater:
         """
         This function updates the content of the latex code without 
         touching the formatting, syntax or structure of the latex file.
@@ -658,22 +692,54 @@ class OllamaClient:
                     max_completion_tokens=tokens,
                 )
         resume_section, updated_content = updated_section_content
+
+        structured_update_latex_llm = update_latex_llm.with_structured_output(latex_resume_updater)
         update_latex_system_prompt = """
             You are a LaTeX content replacement agent.
 
-            Your task is to update ONLY the textual content inside an existing LaTeX resume section,
-            while preserving the original structure, formatting, and layout.
+            Your task is to update ONLY the textual content inside an existing LaTeX of the resume section,while preserving the original structure, formatting, and layout.
+            If there are any escpace characters in the updated resume content, DO NOT transfer them to the latex content.
+            DO NOT tranfer the structure from the update the content resume content to the latex(such as new line, tabs etc ).
 
             You are given a section of the users resume in latex.
             You are given the updated content of the same section in plain text OR markdown format.
             You are given structural contraints derived from original latex content.
 
+            LATEX SYNTAX RULES:
+            1. Reserved Characters: You MUST escape these characters if they appear in the content:
+            - % becomes \\%
+            - & becomes \\&
+            - $ becomes \\$
+            - # becomes \\#
+            - _ becomes \\_
+            - { becomes \\{
+            - } becomes \\}
+            2. Whitespace: Maintain the exact indentation and spacing of the Original LaTeX.
+            3. Ignore any \\n or \\t in the updated content and DO NOT transfer them to the latex content.
+
             STRICT RULES:
+            - Follow the LATEX SYNTAX RULES above without exception.
             - DO NOT MODIFY THE FORMATTING OR SYNTAX OR STRUCTURE OF THE LATEX
             - If the provided section contains name, email, phone number, linkedin profile link, etc which are unlikely to change, DO NOT MODIFY.
+            - Ensure the final output is valid, compilable LaTeX code.
             - Do NOT include explanations or commentary.
 
             Output ONLY the updated latex
+
+            ### EXAMPLES OF CORRECT TRANSFORMATION ###
+
+            Example 1 (Handling Special Characters):
+            - Original LaTeX: \\item {Developed features for the client.}
+            - Updated Content: \\item {Increased sales by 20% & improved UI.}
+            - Result: \\item {Increased sales by 20\\% \\& improved UI.}
+
+            Example 2 (Handling Newlines):
+            - Original LaTeX: \\item {Old content here.}
+            - Updated Content: 
+                \\item {This is a long 
+                sentence with 
+                unwanted newlines.}
+            - Result: \\item {This is a long sentence with unwanted newlines.}
             """
         query_content = f"""
             RESUME SECTION:{resume_section}
@@ -695,7 +761,7 @@ class OllamaClient:
                 HumanMessage(content=query_content)
             ]
         )
-        update_latex_llm_chain = update_latex_prompt | update_latex_llm | StrOutputParser()
+        update_latex_llm_chain = update_latex_prompt | structured_update_latex_llm
 
         updated_latex_content = update_latex_llm_chain.invoke({"resume_section": resume_section, "latex_content": latex_content, "updated_content": updated_content})
 
